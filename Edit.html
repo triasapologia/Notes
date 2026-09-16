@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notes</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #F7F5EF;
+    color: #23221F;
+    font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 24px;
+    border-bottom: 1px solid #DEDACC;
+    background: #F1EDE2;
+    flex-shrink: 0;
+  }
+  #toolbar button {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: 1px solid #23221F;
+    background: transparent;
+    color: #23221F;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #toolbar button:hover { background: #23221F; color: #F7F5EF; }
+  #toolbar button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  #toolbar button:disabled:hover { background: transparent; color: #23221F; }
+
+  #filename {
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    color: #8B8878;
+    margin-left: 4px;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #status {
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    color: #8B8878;
+  }
+
+  #format-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 24px;
+    border-bottom: 1px solid #DEDACC;
+    background: #FBFAF5;
+    flex-shrink: 0;
+  }
+  #format-toolbar button {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #DEDACC;
+    background: #F7F5EF;
+    color: #23221F;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #format-toolbar button:hover { border-color: #23221F; }
+  #format-toolbar button.bold-btn { font-weight: bold; }
+  #format-toolbar button.italic-btn { font-style: italic; }
+  #format-toolbar button.heading-btn { font-size: 12px; font-weight: bold; }
+  #format-toolbar .swatch {
+    width: 16px; height: 16px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  #hl-yellow-btn .swatch { background: #FFF59D; }
+  #hl-green-btn .swatch { background: #B7E4C7; }
+  #format-toolbar .sep {
+    width: 1px;
+    height: 20px;
+    background: #DEDACC;
+    margin: 0 4px;
+  }
+
+  #note-title {
+    border: none;
+    background: transparent;
+    font-family: Georgia, serif;
+    font-size: 26px;
+    padding: 22px 32px 6px 32px;
+    color: #23221F;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  #note-title:focus { outline: none; }
+  #note-title::placeholder { color: #B7B29E; }
+
+  #note-body {
+    flex: 1;
+    overflow-y: auto;
+    font-family: Georgia, serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 4px 32px 32px 32px;
+    color: #23221F;
+  }
+  #note-body:focus { outline: none; }
+  #note-body:empty::before {
+    content: attr(data-placeholder);
+    color: #B7B29E;
+  }
+  #note-body h3 { font-size: 19px; margin: 20px 0 8px 0; }
+  #note-body p { margin: 0 0 14px 0; }
+  #note-body ul { margin: 0 0 14px 0; padding-left: 22px; }
+  #note-body li { margin: 0 0 6px 0; }
+  #note-body mark { padding: 0 2px; border-radius: 2px; }
+
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="toolbar">
+    <button id="new-btn">New</button>
+    <button id="open-btn">Open</button>
+    <button id="save-btn" disabled>Save</button>
+    <span id="filename">No file open</span>
+    <span id="status"></span>
+  </div>
+  <div id="format-toolbar">
+    <button id="bold-btn" class="bold-btn" title="Bold">B</button>
+    <button id="italic-btn" class="italic-btn" title="Italic">I</button>
+    <div class="sep"></div>
+    <button id="hl-yellow-btn" title="Highlight yellow"><span class="swatch"></span></button>
+    <button id="hl-green-btn" title="Highlight green"><span class="swatch"></span></button>
+    <div class="sep"></div>
+    <button id="list-btn" title="Bullet list">•</button>
+    <button id="heading-btn" class="heading-btn" title="Sub-heading">H3</button>
+  </div>
+  <input id="note-title" type="text" placeholder="Title" />
+  <div id="note-body" contenteditable="true" data-placeholder="Start writing..."></div>
+  <input type="file" id="file-input" accept=".html,.htm,text/html" />
+</div>
+
+<script>
+(function () {
+  const titleEl = document.getElementById('note-title');
+  const bodyEl = document.getElementById('note-body');
+  const filenameEl = document.getElementById('filename');
+  const statusEl = document.getElementById('status');
+  const saveBtn = document.getElementById('save-btn');
+  const newBtn = document.getElementById('new-btn');
+  const openBtn = document.getElementById('open-btn');
+  const fileInput = document.getElementById('file-input');
+  const boldBtn = document.getElementById('bold-btn');
+  const italicBtn = document.getElementById('italic-btn');
+  const hlYellowBtn = document.getElementById('hl-yellow-btn');
+  const hlGreenBtn = document.getElementById('hl-green-btn');
+  const listBtn = document.getElementById('list-btn');
+  const headingBtn = document.getElementById('heading-btn');
+
+  const hasFsAccess = 'showOpenFilePicker' in window && window.isSecureContext;
+
+  let fileHandle = null;   // used when File System Access API is available
+  let currentName = null;  // used in fallback (download) mode
+  let dirty = false;
+
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  const usedNames = new Set();
+
+  function slugFilename(title) {
+    const base = (title || 'untitled').trim().toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'untitled';
+    if (!usedNames.has(base)) {
+      usedNames.add(base);
+      return base + '.html';
+    }
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(97 + i);
+      const candidate = base + '-' + letter;
+      if (!usedNames.has(candidate)) {
+        usedNames.add(candidate);
+        return candidate + '.html';
+      }
+    }
+    const fallback = base + '-' + Date.now();
+    usedNames.add(fallback);
+    return fallback + '.html';
+  }
+
+  function composeNoteHtml() {
+    const title = titleEl.value.trim();
+    const displayTitle = title || 'Untitled note';
+    const bodyHtml = bodyEl.innerHTML.trim();
+    return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n' +
+      '<title>' + escapeHtml(displayTitle) + '</title>\n' +
+      '</head>\n<body>\n' +
+      '<h2>' + escapeHtml(displayTitle) + '</h2>\n' +
+      bodyHtml + '\n' +
+      '</body>\n</html>\n';
+  }
+
+  function parseNoteHtml(text) {
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const h2 = doc.body ? doc.body.querySelector('h2') : null;
+    const title = h2 ? h2.textContent : '';
+    let bodyHtml = '';
+    if (doc.body) {
+      const clone = doc.body.cloneNode(true);
+      const firstH2 = clone.querySelector('h2');
+      if (firstH2) firstH2.remove();
+      bodyHtml = clone.innerHTML.trim();
+    }
+    return { title, bodyHtml };
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+    if (text) setTimeout(() => { if (statusEl.textContent === text) statusEl.textContent = ''; }, 1800);
+  }
+
+  function markDirty() {
+    dirty = true;
+    saveBtn.disabled = false;
+  }
+
+  function resetEditor() {
+    titleEl.value = '';
+    bodyEl.innerHTML = '';
+    fileHandle = null;
+    currentName = null;
+    filenameEl.textContent = 'No file open';
+    saveBtn.disabled = true;
+    dirty = false;
+  }
+
+  async function newNote() {
+    resetEditor();
+    titleEl.focus();
+  }
+
+  async function openNote() {
+    if (hasFsAccess) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Note', accept: { 'text/html': ['.html', '.htm'] } }]
+        });
+        const file = await handle.getFile();
+        const text = await file.text();
+        const { title, bodyHtml } = parseNoteHtml(text);
+        titleEl.value = title;
+        bodyEl.innerHTML = bodyHtml;
+        fileHandle = handle;
+        currentName = file.name;
+        filenameEl.textContent = file.name;
+        saveBtn.disabled = true;
+        dirty = false;
+      } catch (e) {
+        // user cancelled the picker
+      }
+    } else {
+      fileInput.click();
+    }
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const { title, bodyHtml } = parseNoteHtml(String(reader.result));
+      titleEl.value = title;
+      bodyEl.innerHTML = bodyHtml;
+      fileHandle = null;
+      currentName = file.name;
+      filenameEl.textContent = file.name;
+      saveBtn.disabled = true;
+      dirty = false;
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  });
+
+  async function saveNote() {
+    const content = composeNoteHtml();
+
+    if (hasFsAccess) {
+      try {
+        if (!fileHandle) {
+          fileHandle = await window.showSaveFilePicker({
+            suggestedName: slugFilename(titleEl.value),
+            types: [{ description: 'Note', accept: { 'text/html': ['.html'] } }]
+          });
+        }
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        currentName = fileHandle.name;
+        filenameEl.textContent = fileHandle.name;
+        saveBtn.disabled = true;
+        dirty = false;
+        setStatus('Saved');
+      } catch (e) {
+        // user cancelled the save dialog
+      }
+    } else {
+      const name = slugFilename(titleEl.value);
+      const blob = new Blob([content], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      currentName = name;
+      filenameEl.textContent = name;
+      saveBtn.disabled = true;
+      dirty = false;
+      setStatus('Downloaded');
+    }
+  }
+
+  // --- Formatting ---
+
+  function focusBody() {
+    bodyEl.focus();
+  }
+
+  function applyBold() {
+    focusBody();
+    try { document.execCommand('bold'); } catch (e) {}
+    markDirty();
+  }
+
+  function applyItalic() {
+    focusBody();
+    try { document.execCommand('italic'); } catch (e) {}
+    markDirty();
+  }
+
+  function applyHighlight(color) {
+    focusBody();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const mark = document.createElement('mark');
+    mark.style.backgroundColor = color;
+    mark.appendChild(range.extractContents());
+    range.insertNode(mark);
+    sel.removeAllRanges();
+    markDirty();
+  }
+
+  function toggleList() {
+    focusBody();
+    try { document.execCommand('insertUnorderedList'); } catch (e) {}
+    markDirty();
+  }
+
+  function currentBlockIsH3() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    let node = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === 3) node = node.parentElement;
+    while (node && node !== bodyEl) {
+      if (node.tagName === 'H3') return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  function toggleHeading() {
+    focusBody();
+    try {
+      document.execCommand('formatBlock', false, currentBlockIsH3() ? 'P' : 'H3');
+    } catch (e) {}
+    markDirty();
+  }
+
+  boldBtn.addEventListener('click', applyBold);
+  italicBtn.addEventListener('click', applyItalic);
+  hlYellowBtn.addEventListener('click', () => applyHighlight('#fff59d'));
+  hlGreenBtn.addEventListener('click', () => applyHighlight('#b7e4c7'));
+  listBtn.addEventListener('click', toggleList);
+  headingBtn.addEventListener('click', toggleHeading);
+
+  newBtn.addEventListener('click', newNote);
+  openBtn.addEventListener('click', openNote);
+  saveBtn.addEventListener('click', saveNote);
+  titleEl.addEventListener('input', markDirty);
+  bodyEl.addEventListener('input', markDirty);
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (!saveBtn.disabled) saveNote();
+    }
+  });
+
+  resetEditor();
+})();
+</script>
+
+</body>
+</html>
